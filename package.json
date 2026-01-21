@@ -1,0 +1,44 @@
+{
+  "name": "flowdev",
+  "version": "1.0.0",
+  "description": "L'orchestrateur CLI intelligent pour développeurs et DevOps",
+  "main": "bin/flowdev.js",
+  "type": "module",
+  "bin": {
+    "flowdev": "./bin/flowdev.js",
+    "fd": "./bin/flowdev.js"
+  },
+  "scripts": {
+    "start": "node bin/flowdev.js",
+    "test": "mocha test/**/*.js",
+    "lint": "eslint src/**/*.js"
+  },
+  "keywords": [
+    "cli",
+    "devtools",
+    "ai",
+    "automation",
+    "devops",
+    "scaffold"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "boxen": "^7.1.1",
+    "chalk": "^5.3.0",
+    "commander": "^11.1.0",
+    "dotenv": "^16.3.1",
+    "execa": "^8.0.1",
+    "figlet": "^1.7.0",
+    "fs-extra": "^11.1.1",
+    "gradient-string": "^2.0.2",
+    "inquirer": "^9.2.11",
+    "ora": "^7.0.1",
+    "tabtab": "^3.0.2"
+  },
+  "devDependencies": {
+    "eslint": "^8.52.0",
+    "mocha": "^10.2.0"
+  }
+}
