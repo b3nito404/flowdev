@@ -3,28 +3,30 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { showLogo } from '../src/utils/ascii.js';
+import { showLogo } from '../src/utils/ascii.js'; 
 import { setupCLI } from '../src/core/cli.js';
 
-
 async function handleBranding() {
-  
   const ppid = process.ppid;
   const sessionFlag = path.join(os.tmpdir(), `flowdev_session_${ppid}`);
 
   if (!fs.existsSync(sessionFlag)) {
     await showLogo();
-   
-    fs.writeFileSync(sessionFlag, '');
+    try {
+      fs.writeFileSync(sessionFlag, '');
+    } catch (e) {
+      
+    }
   }
 }
+
 async function main() {
   await handleBranding();
-
   const program = setupCLI();
   program.parse(process.argv);
 }
+
 main().catch((err) => {
-  console.error('Critical error :', err);
+  console.error('\x1b[31m%s\x1b[0m', `Critical error: ${err.message}`);
   process.exit(1);
 });

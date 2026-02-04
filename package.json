@@ -1,7 +1,7 @@
 {
   "name": "flowdev",
   "version": "1.0.0",
-  "description": "L'orchestrateur CLI intelligent pour développeurs et DevOps",
+  "description": "AI-powered CLI tool",
   "main": "bin/flowdev.js",
   "type": "module",
   "bin": {
@@ -17,7 +17,6 @@
     "cli",
     "devtools",
     "ai",
-    "automation",
     "devops",
     "scaffold"
   ],
@@ -34,7 +33,11 @@
     "fs-extra": "^11.1.1",
     "gradient-string": "^2.0.2",
     "inquirer": "^9.2.11",
+    "is-binary-path": "^3.0.0",
+    "mammoth": "^1.11.0",
+    "ollama": "^0.6.3",
     "ora": "^7.0.1",
+    "pdf-parse": "^2.4.5",
     "tabtab": "^3.0.2"
   },
   "devDependencies": {

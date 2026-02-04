@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flowdev
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: flowdev
+  template:
+    metadata:
+      labels:
+        app: flowdev
+    spec:
+      containers:
+      - name: flowdev
+        image: flowdev:latest 
+        ports:
+        - containerPort: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flowdev-service
+spec:
+  selector:
+    app: flowdev
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 3000
+  type: LoadBalancer

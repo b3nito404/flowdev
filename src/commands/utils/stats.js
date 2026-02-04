@@ -24,3 +24,4 @@ export async function statsCommand() {
     console.error(error.message);
   }
 }
+
