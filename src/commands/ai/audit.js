@@ -1,9 +1,27 @@
-import ollama from 'ollama';
+/**
+ * @fileoverview FlowDev  -  Intelligent CLI tool
+ * @module flowdev
+ * @version 1.0.5
+ * * @license MIT
+ * Copyright (c) 2026 FlowDev Technologies.
+ * * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ * * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ */
+
 import chalk from 'chalk';
 import ora from 'ora';
 import fs from 'fs-extra';
 import path from 'path';
-import { ensureEngineReady } from '../../utils/engine-check.js';
+import { getAIResponse } from '../../utils/engine-check.js'; 
 import { logger } from '../../utils/logger.js';
 
 const AUDIT_EXTENSIONS = ['.js', '.ts', '.py', '.php', '.go', '.jsx', '.tsx', '.vue'];
@@ -31,18 +49,15 @@ export async function auditCommand() {
       return;
     }
 
-    await ensureEngineReady(spinner, 'llama3');
-    
-    spinner.text = chalk.magenta(`Auditing ${files.length} files...`);
+    spinner.text = chalk.magenta(`Preparing audit for ${files.length} files...`);
 
     let codeContext = "";
-    for (const file of files.slice(0, 10)) { 
+    for (const file of files.slice(0, 15)) { 
         const content = await fs.readFile(file, 'utf-8');
         codeContext += `\n--- File: ${path.basename(file)} ---\n${content}\n`;
     }
 
     const prompt = `
-      As an Expert Security Auditor,
       Analyze the following code for:
       1. Potential Bugs or logic errors.
       2. Security vulnerabilities (exposed keys, unsafe inputs).
@@ -50,26 +65,21 @@ export async function auditCommand() {
       4. Code quality and Best Practices.
 
       Provide a concise report with clear headings and bullet points.
-      If the code is perfect, congratulate the developer.
       
       Code to analyze:
-      ${codeContext}
+      ${codeContext.substring(0, 30000)} 
     `;
-
-    const response = await ollama.chat({
-      model: 'llama3',
-      messages: [{ role: 'user', content: prompt }],
-      stream: true,
-    });
+    const responseStream = await getAIResponse(
+        [{ role: 'user', content: prompt }], 
+        spinner
+    );
 
     spinner.stop();
-    console.log(chalk.bold.yellow('\n FLOWDEV AUDIT REPORT\n'));
-
-    for await (const part of response) {
+    for await (const part of responseStream) {
       process.stdout.write(chalk.white(part.message.content));
     }
 
-    console.log(chalk.cyan('\n\nAudit complete. Always double-check AI suggestions before applying.'));
+    console.log(chalk.cyan('\n\nAudit complete. Always verify AI suggestions.'));
 
   } catch (error) {
     spinner.stop();

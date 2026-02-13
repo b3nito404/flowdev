@@ -1,3 +1,22 @@
+/**
+ * @fileoverview FlowDev  -  Intelligent CLI tool
+ * @module flowdev
+ * @version 1.0.5
+ * * @license MIT
+ * Copyright (c) 2026 FlowDev Technologies.
+ * * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ * * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ */
+
 import fs from 'fs-extra';
 import path from 'path';
 import chalk from 'chalk';
@@ -10,9 +29,27 @@ const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
 const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 
-
 const PYTHON_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 const GENERAL_REGEX = /^[a-zA-Z][a-zA-Z0-9-_]*$/;
+
+
+function execute(command, spinner, progressText) {
+  if (progressText) spinner.text = progressText;
+  try {
+
+    execSync(command, { stdio: 'pipe', encoding: 'utf-8' });
+  } catch (error) {
+    const logFile = path.join(process.cwd(), 'flowdev-debug.log');
+    const errorLog = `
+COMMAND: ${command}
+ERROR: ${error.message}
+STDOUT: ${error.stdout}
+STDERR: ${error.stderr}
+    `;
+    fs.writeFileSync(logFile, errorLog);
+    throw new Error(`Command failed. Check the log file for details: ${chalk.bold(logFile)}`);
+  }
+}
 
 export async function generateCommand() {
   const answers = await inquirer.prompt([
@@ -36,30 +73,18 @@ export async function generateCommand() {
       validate: (input, currentAnswers) => {
         const name = input.trim();
         if (!name) return 'A name is required.';
-
-        if (/^\d/.test(name)) {
-          return ' Name cannot start with a number. Please use a letter.';
-        }
-
-      
+        if (/^\d/.test(name)) return 'Name cannot start with a number.';
+        
         if (currentAnswers.type === 'django') {
-          if (!PYTHON_REGEX.test(name)) {
-            return ' Django projects cannot contain dashes (-) or spaces. Use underscores (_) instead.';
-          }
-        } 
-       
-        else {
-          if (!GENERAL_REGEX.test(name)) {
-            return ' Invalid name. Use letters, numbers, dashes (-) or underscores (_).';
-          }
+          if (!PYTHON_REGEX.test(name)) return 'Use underscores (_) for Django projects.';
+        } else {
+          if (!GENERAL_REGEX.test(name)) return 'Invalid characters used (use alphanumeric, - or _).';
         }
-
         return true;
       }
     }
   ]);
 
-  
   if (answers.type === 'django') {
     const djangoSub = await inquirer.prompt([{
       type: 'input',
@@ -67,11 +92,8 @@ export async function generateCommand() {
       message: 'Initial app name:',
       default: 'core',
       validate: (input) => {
-        const name = input.trim();
-        
-        if (!PYTHON_REGEX.test(name)) {
-          return ' Invalid Python App name. Must start with a letter and contain no dashes.';
-        }
+        if (!PYTHON_REGEX.test(input)) return 'Invalid Python App name.';
+        if (input === answers.projectName) return 'App name cannot be the same as project name.';
         return true;
       }
     }]);
@@ -97,66 +119,44 @@ export async function generateCommand() {
     }
 
     await initGit(projectDir, spinner);
-
-    spinner.succeed(chalk.green(`Project "${answers.projectName}" is ready and configured!`));
+    spinner.succeed(chalk.green(`Project "${answers.projectName}" successfully generated.`));
     showSuccessTips(answers);
 
   } catch (error) {
-    spinner.fail(chalk.red('Generation failed.'));
-    console.error(chalk.red(`\nDetailed Error: ${error.message}`));
+    spinner.fail(chalk.red('Installation encountered an error.'));
+    console.error(`\n${chalk.bgRed(' DEBUG ')} ${error.message}`);
   }
 }
 
 
 
 async function setupVite(dir, name, framework, withTailwind, spinner) {
-  spinner.text = `Scaffolding ${framework} with Vite...`;
-  execSync(`${npmCmd} create vite@latest "${name}" -- --template ${framework}`, { stdio: 'ignore' });
+  execute(`${npmCmd} create vite@latest "${name}" -- --template ${framework}`, spinner, `Scaffolding ${framework} with Vite...`);
   
   const originalDir = process.cwd();
   process.chdir(dir);
 
-  spinner.text = 'Installing core dependencies...';
-  execSync(`${npmCmd} install`, { stdio: 'ignore' });
+  execute(`${npmCmd} install`, spinner, 'Installing project dependencies...');
 
   const folders = ['components', 'services', 'utils', 'hooks', 'assets'];
   for (const f of folders) await fs.ensureDir(path.join(dir, 'src', f));
 
   if (withTailwind) {
-    spinner.text = 'Installing & Configuring Tailwind CSS (Manual Setup)...';
-    execSync(`${npmCmd} install -D tailwindcss postcss autoprefixer`, { stdio: 'ignore' });
+    execute(`${npmCmd} install -D tailwindcss@3 postcss@8 autoprefixer@10`, spinner, 'Installing Tailwind CSS...');
 
-    const tailwindConfig = `/** @type {import('tailwindcss').Config} */
-export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx,vue}",
-  ],
-  theme: {
-    extend: {},
-  },
+    const tailwindConfig = `export default {
+  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx,vue}"],
+  theme: { extend: {} },
   plugins: [],
 }`;
     await fs.writeFile(path.join(dir, 'tailwind.config.js'), tailwindConfig);
-
-    const postcssConfig = `export default {
-  plugins: {
-    tailwindcss: {},
-    autoprefixer: {},
-  },
-}`;
-    await fs.writeFile(path.join(dir, 'postcss.config.js'), postcssConfig);
+    await fs.writeFile(path.join(dir, 'postcss.config.js'), `export default { plugins: { tailwindcss: {}, autoprefixer: {} } }`);
 
     const cssPath = path.join(dir, 'src', 'index.css');
     const tailwindDirectives = `@tailwind base;\n@tailwind components;\n@tailwind utilities;\n\n`;
-    
-    let currentCss = "";
-    if (await fs.pathExists(cssPath)) {
-        currentCss = await fs.readFile(cssPath, 'utf-8');
-    }
+    const currentCss = (await fs.pathExists(cssPath)) ? await fs.readFile(cssPath, 'utf-8') : "";
     await fs.writeFile(cssPath, tailwindDirectives + currentCss);
   }
-
   process.chdir(originalDir);
 }
 
@@ -169,28 +169,28 @@ async function setupDjango(dir, data, spinner) {
   process.chdir(dir);
 
   try {
-    spinner.text = 'Creating virtual environment...';
-    execSync(`${pythonCmd} -m venv venv`, { stdio: 'ignore' });
-
-    const venvPython = isWin 
-      ? path.join(dir, 'venv', 'Scripts', 'python.exe') 
-      : path.join(dir, 'venv', 'bin', 'python');
-
-    spinner.text = 'Installing Django...';
-    execSync(`"${venvPython}" -m pip install django`, { stdio: 'ignore' });
-
-    spinner.text = 'Initializing Django project...';
+    execute(`${pythonCmd} -m venv venv`, spinner, 'Creating Virtual Environment...');
     
-    execSync(`"${venvPython}" -m django startproject config .`, { stdio: 'ignore' });
-
-    spinner.text = `Creating app: ${appName}...`;
-    execSync(`"${venvPython}" manage.py startapp ${appName}`, { stdio: 'ignore' });
-
-    await fs.writeFile(path.join(dir, appName, 'urls.py'), 
-      `from django.urls import path\nfrom . import views\n\nurlpatterns = [ path('', views.index, name='index'), ]`);
+    const venvPython = isWin ? path.join(dir, 'venv', 'Scripts', 'python.exe') : path.join(dir, 'venv', 'bin', 'python');
     
-    await fs.writeFile(path.join(dir, appName, 'views.py'), 
-      `from django.http import HttpResponse\n\ndef index(request):\n    return HttpResponse("<h1>${projectName} is live!</h1>")`);
+    execute(`"${venvPython}" -m pip install django`, spinner, 'Installing Django via pip...');
+    execute(`"${venvPython}" -m django startproject config .`, spinner, 'Initializing Django core...');
+    execute(`"${venvPython}" manage.py startapp ${appName}`, spinner, `Creating app: ${appName}...`);
+
+
+    const settingsPath = path.join(dir, 'config', 'settings.py');
+    let settings = await fs.readFile(settingsPath, 'utf-8');
+    settings = settings.replace("INSTALLED_APPS = [", `INSTALLED_APPS = [\n    '${appName}',`);
+    await fs.writeFile(settingsPath, settings);
+
+    // Basic app configuration
+    await fs.writeFile(path.join(dir, appName, 'urls.py'), `from django.urls import path\nfrom . import views\n\nurlpatterns = [ path('', views.index, name='index'), ]`);
+    await fs.writeFile(path.join(dir, appName, 'views.py'), `from django.http import HttpResponse\n\ndef index(request):\n    return HttpResponse("<h1>${projectName} is live!</h1>")`);
+    
+    // Global URL routing
+    const projectUrlsPath = path.join(dir, 'config', 'urls.py');
+    const projectUrls = `from django.contrib import admin\nfrom django.urls import path, include\n\nurlpatterns = [\n    path('admin/', admin.site.urls),\n    path('', include('${appName}.urls')),\n]`;
+    await fs.writeFile(projectUrlsPath, projectUrls);
 
   } finally {
     process.chdir(originalDir);
@@ -199,49 +199,54 @@ async function setupDjango(dir, data, spinner) {
 
 async function initGit(dir, spinner) {
   try {
-    spinner.text = 'Initializing Git...';
+    spinner.text = 'Initializing Git repository...';
     const ignorePath = path.join(dir, '.gitignore');
     if (!(await fs.pathExists(ignorePath))) {
-      const defaultIgnore = 'node_modules\n.env\ndist\nbuild\n__pycache__\n*.log\nvenv\n.venv\n';
-      await fs.writeFile(ignorePath, defaultIgnore);
+      await fs.writeFile(ignorePath, 'node_modules\n.env\ndist\nbuild\n__pycache__\n*.log\nvenv\n*.pyc\n');
     }
     const originalDir = process.cwd();
     process.chdir(dir);
-    execSync('git init', { stdio: 'ignore' });
-    execSync('git add .', { stdio: 'ignore' });
-    execSync('git commit -m "Initial commit by FlowDev 🚀"', { stdio: 'ignore' });
+    execute('git init', spinner);
+    execute('git add .', spinner);
+    execute('git commit -m "Initial commit by FlowDev"', spinner);
     process.chdir(originalDir);
   } catch (err) {
-    spinner.warn(chalk.yellow('Git initialization skipped.'));
+    spinner.warn(chalk.yellow('Git initialization skipped. Please ensure Git is installed.'));
   }
 }
 
 async function setupAngular(dir, name, spinner) {
-  spinner.text = 'Generating Angular Workspace...';
-  
-  execSync(`${npxCmd} --yes -p @angular/cli ng new "${name}" --defaults --skip-git`, { stdio: 'ignore' });
+  execute(`${npxCmd} --yes -p @angular/cli ng new "${name}" --defaults --skip-git`, spinner, 'Generating Angular Workspace...');
 }
 
 async function setupExpress(dir, name, spinner) {
-  spinner.text = 'Setting up Express...';
   await fs.ensureDir(dir);
-  const pkg = { name, version: '1.0.0', scripts: { start: 'node src/index.js' }, dependencies: { express: '^4.18.2', cors: '^2.8.5' }};
+  const pkg = { 
+    name, 
+    version: '1.0.0', 
+    type: 'module', 
+    scripts: { start: 'node src/index.js' }, 
+    dependencies: { express: '^4.18.2', cors: '^2.8.5' }
+  };
   await fs.writeJson(path.join(dir, 'package.json'), pkg, { spaces: 2 });
   await fs.ensureDir(path.join(dir, 'src'));
-  await fs.writeFile(path.join(dir, 'src', 'index.js'), `const express = require('express');\nconst app = express();\napp.get('/', (req, res) => res.send('API OK'));\napp.listen(3000);`);
+  await fs.writeFile(path.join(dir, 'src', 'index.js'), `import express from 'express';\nconst app = express();\napp.get('/', (req, res) => res.send('API OK'));\napp.listen(3000, () => console.log('Server running on http://localhost:3000'));`);
+  
+  const originalDir = process.cwd();
   process.chdir(dir);
-  execSync(`${npmCmd} install`, { stdio: 'ignore' });
+  execute(`${npmCmd} install`, spinner, 'Installing Express dependencies...');
+  process.chdir(originalDir);
 }
 
 function showSuccessTips(data) {
-  console.log(chalk.yellow('\n  Tips :'));
-  console.log(`${chalk.white('*')} cd ${chalk.bold(data.projectName)}`);
-  if (data.type.includes('tailwind')) {
-    console.log(`${chalk.green('*')} Tailwind & PostCSS are manually configured.`);
-    console.log(`${chalk.white('*')} Run: ${chalk.bold('npm run dev')}`);
-  } else if (data.type === 'django') {
-    console.log(`${chalk.white('*')} Run: ${chalk.bold('python manage.py runserver')}`);
+  console.log(chalk.blue('\n  Next Steps :'));
+  console.log(`${chalk.white('1.')} cd ${chalk.bold(data.projectName)}`);
+  if (data.type === 'django') {
+    console.log(`${chalk.white('2.')} ${process.platform === 'win32' ? 'venv\\Scripts\\activate' : 'source venv/bin/activate'}`);
+    console.log(`${chalk.white('3.')} python manage.py runserver`);
+  } else if (data.type === 'angular') {
+    console.log(`${chalk.white('2.')} ng serve`);
   } else {
-    console.log(`${chalk.white('*')} Run: ${chalk.bold('npm start')}`);
+    console.log(`${chalk.white('2.')} npm ${data.type.includes('tailwind') ? 'run dev' : 'start'}`);
   }
 }
