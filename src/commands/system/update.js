@@ -55,7 +55,7 @@ export async function updateCommand() {
             try {
                
                 execSync(`npm install -g ${packageName}@latest`, { stdio: 'ignore' });
-                updateSpinner.succeed(chalk.green(`FlowDev has been updated to v${latestVersion}! ✨`));
+                updateSpinner.succeed(chalk.green(`FlowDev has been updated to v${latestVersion}! `));
             } catch (err) {
                 updateSpinner.fail(chalk.red('Update failed. Try running with sudo: sudo npm install -g @flowdevcli/flowdev'));
             }
