@@ -34,7 +34,7 @@ import { generateCommand } from '../commands/scaffold/generate.js';
 import { auditCommand } from '../commands/ai/audit.js';
 import { testCommand } from '../commands/ai/test.js';
 import { updateCommand } from '../commands/system/update.js';
-import { configCommand } from './commands/config.js'
+import { configCommand } from '../commands/config.js'
 
 
 const require = createRequire(import.meta.url);
