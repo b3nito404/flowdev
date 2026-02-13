@@ -34,6 +34,7 @@ import { generateCommand } from '../commands/scaffold/generate.js';
 import { auditCommand } from '../commands/ai/audit.js';
 import { testCommand } from '../commands/ai/test.js';
 import { updateCommand } from '../commands/system/update.js';
+import { readmeCommand } from '../commands/ai/readme.js';
 import { configCommand } from '../commands/config.js'
 
 
