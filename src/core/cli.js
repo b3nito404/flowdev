@@ -28,7 +28,6 @@ import { dockerizeCommand } from '../commands/devops/dockerize.js';
 import {findCommand} from '../commands/scaffold/find.js'
 import { askCommand } from '../commands/ai/ask.js';
 import { explainCommand } from '../commands/ai/explain.js';
-import { askCommand } from '../commands/ai/readme.js'
 import { envCommand } from '../commands/devops/env.js';
 import { kubeCommand } from '../commands/devops/kube.js';
 import { generateCommand } from '../commands/scaffold/generate.js';
