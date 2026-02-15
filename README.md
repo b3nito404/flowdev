@@ -10,10 +10,6 @@ Published on npm. Designed for professional environments and production-grade wo
 
 ---
 
-Replace the path above with your official SVG logo. SVG format is strongly recommended for clarity and scalability.
-
----
-
 ## Badges
 
 [![npm version](https://img.shields.io/npm/v/flowdev.svg?style=flat-square)](https://www.npmjs.com/package/flowdev)  
@@ -281,12 +277,12 @@ Cloud usage is strictly opt-in and fully configurable.
 Use version:
 
 ```bash
->= 1.1.1
+>= 1.1.2
 ```
 
 ### Important Notice
 
-Versions **1.0.5 through 1.0.9** contained critical regressions and should not be used in production environments.
+Versions **1.0.5 through 1.1.1** contained critical regressions and should not be used in production environments.
 
 If you are using one of these versions, upgrade immediately:
 
@@ -312,14 +308,14 @@ npm publish
 To deprecate a specific version:
 
 ```bash
-npm deprecate flowdev@1.0.7 "Critical bug — upgrade to >= 1.1.1"
+npm deprecate flowdev@1.0.7 "Critical bug — upgrade to >= 1.1.2"
 ```
 
 To deprecate multiple versions:
 
 ```bash
-for v in 1.0.5 1.0.6 1.0.7 1.0.8 1.0.9; do
-  npm deprecate flowdev@$v "Critical bugs — upgrade to >= 1.1.1"
+for v in 1.0.5 1.0.6 1.0.7 1.0.8 1.0.9 1.0.10 1.1.0 1.1.1; do
+  npm deprecate flowdev@$v "Critical bugs — upgrade to >= 1.1.2"
 done
 ```
 

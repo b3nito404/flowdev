@@ -22,7 +22,7 @@ import ora from 'ora';
 import fs from 'fs-extra';
 import path from 'path';
 import { logger } from '../../utils/logger.js';
-import { getAIResponse } from '../../utils/engine-check.js'; // IMPORT UPDATED
+import { getAIResponse } from '../../utils/engine-check.js'; 
 
 export async function testCommand(fileRelativePath) {
   const spinner = ora(chalk.cyan(`Preparing test generation...`)).start();
@@ -59,19 +59,18 @@ export async function testCommand(fileRelativePath) {
       ${content}
     `;
 
-    // APPEL UNIFIÉ
+   
     const responseStream = await getAIResponse(
         [{ role: 'user', content: prompt }],
         spinner
     );
 
-    // On consomme le stream pour reconstruire la réponse complète
     let fullResponse = "";
     spinner.text = chalk.yellow("Writing tests (Streaming)...");
     
     for await (const part of responseStream) {
         fullResponse += part.message.content;
-        // Petit effet visuel optionnel pour montrer que ça bosse
+    
         spinner.text = chalk.yellow(`Generating tests... (${fullResponse.length} chars)`);
     }
 
@@ -84,7 +83,7 @@ export async function testCommand(fileRelativePath) {
     const outputPath = path.join(dir, testFileName);
     await fs.writeFile(outputPath, testCode);
 
-    console.log(chalk.green(`\n✅ Tests generated successfully!`));
+    console.log(chalk.green(`\nTests generated successfully!`));
     console.log(chalk.gray(` Location: `) + chalk.white(outputPath));
     console.log(chalk.yellow(` Tip: Run your tests with '${ext === '.py' ? 'pytest' : 'npm test'}'`));
 

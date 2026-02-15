@@ -1,9 +1,28 @@
+/**
+ * @fileoverview FlowDev  -  Intelligent CLI tool
+ * @module flowdev
+ * @version 1.0.5
+ * * @license MIT
+ * Copyright (c) 2026 FlowDev Technologies.
+ * * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ * * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ */
+
 import { execSync } from 'node:child_process';
 import chalk from 'chalk';
 import ora from 'ora';
 import inquirer from 'inquirer';
 import { logger } from '../../utils/logger.js';
-import { selectAIModel, ensureEngineReady, getAIResponse } from '../../utils/engine-check.js';
+import { getAIResponse } from '../../utils/engine-check.js';
 
 export async function commitCommand() {
   try {
@@ -21,10 +40,7 @@ export async function commitCommand() {
       return;
     }
 
-    const provider = await selectAIModel();
     const spinner = ora(chalk.cyan('Analyzing staged changes...')).start();
-
-    await ensureEngineReady(spinner, provider);
 
     const prompt = `Analyze this git diff and write a concise "Conventional Commit" message (feat, fix, docs, style, refactor, chore). 
     Return ONLY the message, no markdown, no quotes, no explanations.
@@ -32,17 +48,22 @@ export async function commitCommand() {
     Diff:
     ${diff.substring(0, 8000)}`;
 
-    const responseStream = await getAIResponse(provider, prompt);
-    
-    let suggestedMessage = "";
-    for await (const part of responseStream) {
-      suggestedMessage += part.message.content;
-    }
+    const responseStream = await getAIResponse(
+        [{ role: 'user', content: prompt }],
+        spinner
+    );
 
     spinner.stop();
-    suggestedMessage = suggestedMessage.trim();
-
+    
+    let suggestedMessage = "";
     console.log(chalk.gray('\nProposed Commit Message:'));
+    
+    for await (const part of responseStream) {
+        const content = part?.message?.content || "";
+        suggestedMessage += content;
+    }
+    
+    suggestedMessage = suggestedMessage.trim();
     console.log(chalk.bold.green(`"${suggestedMessage}"\n`));
 
     const { action } = await inquirer.prompt([
@@ -58,10 +79,7 @@ export async function commitCommand() {
       }
     ]);
 
-    if (action === 'cancel') {
-      console.log(chalk.gray('Commit operation cancelled.'));
-      return;
-    }
+    if (action === 'cancel') return;
 
     let finalMessage = suggestedMessage;
     if (action === 'edit') {
@@ -75,8 +93,7 @@ export async function commitCommand() {
     }
 
     const safeMessage = finalMessage.replace(/"/g, '\\"');
-    execSync(`git commit -m "${safeMessage}"`, { stdio: 'ignore' });
-    
+    execSync(`git commit -m "${safeMessage}"`);
     console.log(chalk.green('Changes committed successfully.'));
 
     const { pushAction } = await inquirer.prompt([
@@ -91,7 +108,6 @@ export async function commitCommand() {
     if (pushAction) {
       const pushSpinner = ora(chalk.cyan('Pushing to remote...')).start();
       try {
-
         execSync('git push', { stdio: 'pipe' });
         pushSpinner.succeed(chalk.green('Changes pushed to remote successfully.'));
       } catch (pushErr) {
