@@ -36,6 +36,7 @@ import { testCommand } from '../commands/ai/test.js';
 import { updateCommand } from '../commands/system/update.js';
 import { readmeCommand } from '../commands/ai/readme.js';
 import { configCommand } from '../commands/config.js'
+import { commitCommand } from '../commands/git/commit.js';
 
 
 const require = createRequire(import.meta.url);
@@ -137,6 +138,11 @@ export function setupCLI() {
   .command('readme')
   .description('Automatically generate a README.md for the project')
   .action(readmeCommand);
+
+  program
+  .command('commit')
+  .description('Generate an AI-powered commit message based on staged changes')
+  .action(commitCommand);
 
  program
   .command('config')

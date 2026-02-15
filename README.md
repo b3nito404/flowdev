@@ -1,157 +1,359 @@
-FLOWDEV
-=======
-The intelligent CLI for modern workflow automation.
+# FLOWDEV
 
-FlowDev is a privacy-first, offline-capable CLI tool designed to accelerate developer workflows. From scaffolding Docker environments to generating project structures using local or cloud AI, FlowDev keeps you in the flow without leaving your terminal.
+**FlowDev — The Intelligent CLI for Modern Workflow Automation**
 
-> "The developer tool for the next generation."
+FlowDev is a privacy-first, hybrid AI-powered Command Line Interface designed to accelerate and automate modern developer workflows. From infrastructure scaffolding to AI-assisted audits and documentation generation, FlowDev keeps developers productive without leaving the terminal.
 
-[![npm version](https://img.shields.io/npm/v/flowdev.svg?style=flat-square)](https://www.npmjs.com/package/flowdev)
-[![install size](https://img.shields.io/badge/install%20size-unknown-blue?style=flat-square)](https://packagephobia.com/result?p=flowdev)
-[![downloads](https://img.shields.io/npm/dm/flowdev.svg?style=flat-square)](https://www.npmjs.com/package/flowdev)
+> “Automation without context switching.”
 
-Install
-=======
+Published on npm. Designed for professional environments and production-grade workflows.
 
-Global Installation (Recommended)
----------------------------------
-To use FlowDev commands anywhere on your system:
+---
+
+Replace the path above with your official SVG logo. SVG format is strongly recommended for clarity and scalability.
+
+---
+
+## Badges
+
+[![npm version](https://img.shields.io/npm/v/flowdev.svg?style=flat-square)](https://www.npmjs.com/package/flowdev)  
+[![weekly downloads](https://img.shields.io/npm/dw/flowdev.svg?style=flat-square)](https://www.npmjs.com/package/flowdev)  
+[![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)](./LICENSE)  
+[![node version](https://img.shields.io/badge/node-%3E%3D18-blue?style=flat-square)](https://nodejs.org)
+
+---
+
+## Table of Contents
+
+- Overview
+- Installation
+- Core Commands
+- AI Capabilities
+- DevOps Utilities
+- Project Scaffolding
+- Feature Comparison
+- Requirements
+- AI Configuration (Local & Cloud)
+- Versioning & Known Issues
+- Maintainer Workflow
+- Contributing
+- License
+
+---
+
+## Overview
+
+FlowDev provides:
+
+• AI-assisted development  
+• Automated Docker and Kubernetes configuration  
+• Intelligent project analysis  
+• AI-generated documentation  
+• Hybrid local/cloud processing architecture  
+• CI-ready deterministic outputs  
+
+It is built for developers and teams who value speed, clarity, reproducibility, and terminal-native workflows.
+
+FlowDev integrates with local AI runtimes such as Ollama and optionally supports cloud-based reasoning providers. Cloud usage is strictly opt-in.
+
+---
+
+## Installation
+
+### Global Installation (Recommended)
 
 ```bash
 npm install -g flowdev
+```
 
-Local Installation
+### Local Installation (Per Project)
 
-If you prefer to use it per project:
-Bash
+```bash
+npm install --save-dev flowdev
+```
 
-npm install flowdev --save-dev
+### Verify Installation
 
-Usage
-
-Once installed, FlowDev exposes the flowdev binary.
-
-    Check your installation:
-
-Bash
+```bash
 flowdev --version
+```
 
-    *Configure your environment (API keys & Models):
-Bash
-flowdev config
+---
 
+## Core Commands
 
-    *Analyze your current project:
-Bash
+### Display Version
+
+```bash
+flowdev version
+```
+
+---
+
+### Project Tree Visualization
+
+```bash
+flowdev tree
+```
+
+---
+
+### Project Statistics Analysis
+
+```bash
 flowdev stats
+```
 
-    *Generate a Docker environment:
-Bash
-flowdev dockerize
+---
 
-Features
-AI & Automation (Hybrid Engine)
+### Pattern Search (Recursive, Developer-Optimized)
 
-FlowDev integrates with Ollama for offline capabilities and supports DeepSeek for high-performance cloud reasoning.
-
-1. Smart Assistant
-Ask questions about code or architecture using local or cloud models.
-Bash
-
-flowdev ask "How do I optimize a React useEffect hook?"
-
-2. Intelligent Audit
-Audit your code for bugs, security, and performance using AI.
-Bash
-
-flowdev audit
-
-3. Automatic Documentation
-Generate a professional README.md for your project instantly.
-Bash
-
-flowdev readme
-
-DevOps & Infrastructure
-
-1. Dockerize
-Instantly generate production-ready Dockerfile and docker-compose.yml files.
-Bash
-
-flowdev dockerize
-
-2. Kubernetes (Kube)
-Generate Kubernetes deployment and service manifests for your application.
-Bash
-
-flowdev kube
-
-Utilities
-
-1. Generate
-Generate a complete project (React, Django, Vue, Angular, Express) with Git and dependencies automatically configured.
-Bash
-
-flowdev generate
-
-2. Find (Pattern Search)
-A recursive search tool optimized for developers. Ignores node_modules and binaries.
-Bash
-
+```bash
 flowdev find "TODO" --ext js,ts
+```
 
-3. Stats
-Get an instant breakdown of your project's size, file count, and language distribution.
-Bash
+---
 
-flowdev stats
+## AI Capabilities
 
-Requirements
-Node.js
+### Ask AI a Technical Question
 
-FlowDev requires Node.js v18+.
-Local AI (Optional)
+```bash
+flowdev ask "How can I optimize a React useEffect hook?"
+```
 
-To use local AI features, you must have Ollama running locally.
+---
 
-    Install Ollama: ollama.com
+### Explain a Source File
 
-    Start the service: ollama serve
+```bash
+flowdev explain src/app.js
+```
 
-    FlowDev handles the rest.
+---
 
-Cloud AI (Optional)
+### Audit Code (Security, Performance, Logic)
 
-To use Cloud features (DeepSeek), configure your API key via flowdev config.
-Documentation
-flowdev generate
-
-Provisions full-stack templates. Includes a fail-safe execution wrapper that generates a flowdev-debug.log if an installation fails.
+```bash
 flowdev audit
+```
 
-Uses AI to scan for security vulnerabilities and logic flaws. Perfect for pre-commit checks.
+---
+
+### Generate Unit Tests for a File
+
+```bash
+flowdev test src/app.js
+```
+
+---
+
+### Generate README Automatically
+
+```bash
+flowdev readme
+```
+
+---
+
+### AI-Powered Commit Message
+
+```bash
+flowdev commit
+```
+
+---
+
+## DevOps Utilities
+
+### Generate Docker Configuration
+
+```bash
 flowdev dockerize
+```
 
-Generates optimized configurations using multi-stage builds and non-root security practices.
+Automatically creates:
+
+• Production-ready Dockerfile  
+• docker-compose.yml  
+• Multi-stage builds  
+• Non-root security practices  
+
+---
+
+### Generate Kubernetes Manifests
+
+```bash
+flowdev kube
+```
+
+Creates deployment and service configuration files.
+
+---
+
+### Generate Environment Template
+
+```bash
 flowdev env
+```
 
-Scans your project code and generates a .env.example file based on your environment variable usage.
-FAQ
-Does FlowDev send my code to the cloud?
+Scans your codebase and generates a `.env.example` file.
 
-By default, No. Local AI processing happens on your machine via Ollama. Cloud processing is only used if you explicitly configure it and choose a cloud model.
-Do I need an API Key?
+---
 
-No for local use. Yes if you wish to use cloud models like DeepSeek.
-Why "flowdev"?
+## Project Scaffolding
 
-Because switching contexts breaks your flow. FlowDev keeps you in the terminal, automating the boring stuff so you can focus on the code.
-Changelog
+### Generate a Full Project
 
-See CHANGELOG.md for details on recent updates.
-License
+```bash
+flowdev generate
+```
 
-[MIT](https://www.google.com/search?q=LICENSE)
+Supports scaffolding for:
 
+• React  
+• Django  
+• Vue  
+• Angular  
+• Express  
 
+Includes Git initialization and dependency installation.
 
+---
+
+## Feature Comparison
+
+| Capability                          | FlowDev | Custom Scripts | Generic CLI Tools |
+|-------------------------------------|:-------:|:--------------:|:-----------------:|
+| Terminal-first design               | Yes     | Partial        | Partial           |
+| Local AI (offline support)          | Yes     | No             | No                |
+| AI code auditing                    | Yes     | No             | Limited           |
+| Docker + Kubernetes generation      | Yes     | Partial        | Varies            |
+| Automatic README generation         | Yes     | No             | Limited           |
+| Environment template generation     | Yes     | No             | No                |
+| CI-compatible structured output     | Yes     | Varies         | Varies            |
+
+---
+
+## Requirements
+
+• Node.js v18 or higher  
+• Optional: Local AI via Ollama  
+• Optional: Cloud AI API key  
+
+---
+
+## AI Configuration
+
+### Local AI (Offline Mode)
+
+To enable local AI features:
+
+1. Install Ollama
+2. Start the service:
+
+```bash
+ollama serve
+```
+
+FlowDev will automatically detect and use the local runtime.
+
+---
+
+### Cloud AI
+
+To enable cloud-based reasoning:
+
+```bash
+flowdev config
+```
+
+Add your API key and select your preferred model.
+
+Cloud usage is strictly opt-in and fully configurable.
+
+---
+
+## Versioning & Known Issues
+
+### Current Stable Version
+
+Use version:
+
+```bash
+>= 1.0.11
+```
+
+### Important Notice
+
+Versions **1.0.5 through 1.0.9** contained critical regressions and should not be used in production environments.
+
+If you are using one of these versions, upgrade immediately:
+
+```bash
+npm install -g flowdev@latest
+```
+
+---
+
+## Maintainer Workflow
+
+### Publishing a New Version
+
+After modifying code or documentation:
+
+```bash
+npm version patch
+npm publish
+```
+
+### Deprecating Faulty Versions
+
+To deprecate a specific version:
+
+```bash
+npm deprecate flowdev@1.0.7 "Critical bug — upgrade to >= 1.0.11"
+```
+
+To deprecate multiple versions:
+
+```bash
+for v in 1.0.5 1.0.6 1.0.7 1.0.8 1.0.9; do
+  npm deprecate flowdev@$v "Critical bugs — upgrade to >= 1.0.11"
+done
+```
+
+To verify deprecation:
+
+```bash
+npm view flowdev@1.0.5 deprecated
+```
+
+---
+
+## Contributing
+
+1. Fork the repository  
+2. Create a feature branch  
+3. Submit a Pull Request with clear technical description  
+4. Follow semantic versioning principles  
+
+Major architectural changes should begin with a proposal issue before implementation.
+
+---
+
+## Philosophy
+
+FlowDev exists to reduce friction in modern development.
+
+Automation should enhance engineering judgment, not replace it.  
+Tooling should remain transparent, reproducible, and privacy-aware.  
+The terminal remains the most powerful development interface.
+
+---
+
+## License
+
+MIT License
+
+© 2026 FlowDev Technologies
