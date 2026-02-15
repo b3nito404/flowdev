@@ -281,7 +281,7 @@ Cloud usage is strictly opt-in and fully configurable.
 Use version:
 
 ```bash
->= 1.0.11
+>= 1.1.1
 ```
 
 ### Important Notice
@@ -312,14 +312,14 @@ npm publish
 To deprecate a specific version:
 
 ```bash
-npm deprecate flowdev@1.0.7 "Critical bug — upgrade to >= 1.0.11"
+npm deprecate flowdev@1.0.7 "Critical bug — upgrade to >= 1.1.1"
 ```
 
 To deprecate multiple versions:
 
 ```bash
 for v in 1.0.5 1.0.6 1.0.7 1.0.8 1.0.9; do
-  npm deprecate flowdev@$v "Critical bugs — upgrade to >= 1.0.11"
+  npm deprecate flowdev@$v "Critical bugs — upgrade to >= 1.1.1"
 done
 ```
 
