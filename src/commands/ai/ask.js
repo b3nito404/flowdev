@@ -1,62 +1,78 @@
-/**
- * @fileoverview FlowDev  -  Intelligent CLI tool
- * @module flowdev
- * @version 1.0.5
- * * @license MIT
- * Copyright (c) 2026 FlowDev Technologies.
- * * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- * * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- * * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
- */
 
+import os from 'os';
+import path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
 import fs from 'fs-extra';
 import { logger } from '../../utils/logger.js';
-import { getAIResponse } from '../../utils/engine-check.js'; 
+import { getAIResponse } from '../../utils/engine-check.js';
 
-export async function askCommand(question) {
+
+const HISTORY_FILE = path.join(os.homedir(), '.flowdev', 'chat_history.json');
+const MAX_HISTORY  = 10; 
+
+export async function askCommand(question, options = {}) {
   if (!question) {
     logger.error('Ask me a question!');
     return;
   }
+  if (question.toLowerCase() === 'clear' || options.clear) {
+    if (await fs.pathExists(HISTORY_FILE)) {
+      await fs.remove(HISTORY_FILE);
+    }
+    console.log(chalk.green('Memory cleared. We can start a new topic!'));
+    if (question.toLowerCase() === 'clear') return; 
+  }
 
-  let spinner = ora(chalk.cyan('Initialization...')).start();
+  const spinner = ora(chalk.cyan('Initialization...')).start();
 
   try {
-    let context = 'You are FlowDev, an intelligent CLI assistant.';
+    
+    await fs.ensureDir(path.dirname(HISTORY_FILE));
+    let systemContext = 'You are FlowDev, an intelligent CLI assistant specialized in software development.';
     try {
       if (await fs.pathExists('package.json')) {
         const pkg = await fs.readJson('package.json');
-        if (pkg?.name) context += ` CURRENT CONTEXT: User is in project "${pkg.name}".`;
+        if (pkg?.name) systemContext += ` CURRENT CONTEXT: User is in project "${pkg.name}".`;
       }
-    } catch (e) {}
-    const responseStream = await getAIResponse(
-        [
-            { role: 'system', content: context },
-            { role: 'user', content: question }
-        ],
-        spinner
-    );
+    } catch {}
+
+    let messages = [];
+    if (await fs.pathExists(HISTORY_FILE)) {
+      messages = await fs.readJson(HISTORY_FILE);
+      
+      if (messages[0]?.role === 'system') {
+        messages[0].content = systemContext;
+      }
+    } else {
+      messages = [{ role: 'system', content: systemContext }];
+    }
+
+    messages.push({ role: 'user', content: question });
+
+    if (messages.length > MAX_HISTORY * 2 + 1) {
+      messages = [messages[0], ...messages.slice(-(MAX_HISTORY * 2))];
+    }
+
+    const responseStream = await getAIResponse(messages, spinner);
 
     spinner.stop();
-    console.log(chalk.bold.magenta('FlowDev:'));
+    console.log(chalk.bold.magenta('\nFlowDev:'));
 
+    let fullAssistantResponse = '';
     for await (const part of responseStream) {
       const content = part?.message?.content;
       if (typeof content === 'string') {
         process.stdout.write(chalk.white(content));
+        fullAssistantResponse += content; 
       }
     }
+
     process.stdout.write('\n');
+
+    messages.push({ role: 'assistant', content: fullAssistantResponse });
+    await fs.writeJson(HISTORY_FILE, messages, { spaces: 2 });
+
   } catch (error) {
     spinner.stop();
     logger.error('Error: ' + error.message);

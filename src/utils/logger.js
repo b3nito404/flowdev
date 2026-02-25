@@ -1,7 +1,8 @@
+
 /**
  * @fileoverview FlowDev  -  Intelligent CLI tool
  * @module flowdev
- * @version 1.0.5
+ * @version 1.2.0
  * * @license MIT
  * Copyright (c) 2026 FlowDev Technologies.
  * * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -16,7 +17,6 @@
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
  */
-
 import chalk from 'chalk';
 
 export const logger = {

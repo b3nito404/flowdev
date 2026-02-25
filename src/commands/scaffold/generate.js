@@ -1,7 +1,8 @@
+
 /**
  * @fileoverview FlowDev  -  Intelligent CLI tool
  * @module flowdev
- * @version 1.0.5
+ * @version 1.2.0
  * * @license MIT
  * Copyright (c) 2026 FlowDev Technologies.
  * * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -16,7 +17,6 @@
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
  */
-
 import fs from 'fs-extra';
 import path from 'path';
 import chalk from 'chalk';
@@ -25,228 +25,265 @@ import inquirer from 'inquirer';
 import { execSync } from 'child_process';
 import { logger } from '../../utils/logger.js';
 
-const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
 const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+const goCmd = 'go';
 
-const PYTHON_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
-const GENERAL_REGEX = /^[a-zA-Z][a-zA-Z0-9-_]*$/;
+class ProgressTracker {
+  constructor(totalSteps) {
+    this.totalSteps = totalSteps;
+    this.currentStep = 0;
+    this.barSize = 25;
+  }
+  next() { this.currentStep++; }
+  getBar() {
+    const progress = Math.min(this.currentStep / this.totalSteps, 1);
+    const filled = Math.round(this.barSize * progress);
+    return chalk.cyan(`[${"#".repeat(filled)}${"-".repeat(this.barSize - filled)}]`);
+  }
+}
 
-
-function execute(command, spinner, progressText) {
-  if (progressText) spinner.text = progressText;
+/**
+ * @param {string} command 
+ * @param {object} spinner 
+ * @param {object} tracker 
+ * @param {string} text 
+ * @param {boolean} inherit 
+ */
+function execute(command, spinner, tracker, text, inherit = false) {
+  if (tracker) tracker.next();
+  if (spinner) {
+    spinner.text = `${tracker.getBar()} ${chalk.bold(text)}`;
+  }
+  
   try {
+    
+    if (inherit && spinner) spinner.stop(); 
 
-    execSync(command, { stdio: 'pipe', encoding: 'utf-8' });
+    execSync(command, { 
+      stdio: inherit ? 'inherit' : 'pipe', 
+      encoding: 'utf-8', 
+      env: process.env 
+    });
+
+    if (inherit && spinner) spinner.start();
   } catch (error) {
-    const logFile = path.join(process.cwd(), 'flowdev-debug.log');
-    const errorLog = `
-COMMAND: ${command}
-ERROR: ${error.message}
-STDOUT: ${error.stdout}
-STDERR: ${error.stderr}
-    `;
-    fs.writeFileSync(logFile, errorLog);
-    throw new Error(`Command failed. Check the log file for details: ${chalk.bold(logFile)}`);
+    const logFile = path.join(process.cwd(), 'flowdev-error.log');
+    fs.writeFileSync(logFile, `CMD: ${command}\nERR: ${error.message}\nSTDERR: ${error.stderr || 'Check console'}`);
+    throw new Error(`Command failed: ${command}.`);
+  }
+}
+
+async function ensurePrerequisites(framework) {
+  const requirements = {
+    'go-micro': { cmd: 'go version', name: 'Go', install: { arch: 'sudo pacman -S --noconfirm go', debian: 'sudo apt install -y golang', mac: 'brew install go', win: 'winget install GoLang.Go' } },
+    'fastapi': { cmd: `${pythonCmd} --version`, name: 'Python', install: { arch: 'sudo pacman -S --noconfirm python', debian: 'sudo apt install -y python3', mac: 'brew install python', win: 'winget install Python.Python.3' } },
+    'django': { cmd: `${pythonCmd} --version`, name: 'Python', install: { arch: 'sudo pacman -S --noconfirm python', debian: 'sudo apt install -y python3', mac: 'brew install python', win: 'winget install Python.Python.3' } }
+  };
+
+  const req = requirements[framework];
+  if (!req) return true;
+
+  try {
+    execSync(req.cmd, { stdio: 'pipe' });
+    return true;
+  } catch (e) {
+    logger.warn(`${req.name} is not installed on your system.`);
+    const { confirmInstall } = await inquirer.prompt([{
+      type: 'confirm',
+      name: 'confirmInstall',
+      message: `Would you like FlowDev to try and install ${req.name} for you?`,
+      default: true
+    }]);
+
+    if (confirmInstall) {
+      const spinner = ora(`Installing ${req.name}...`).start();
+      try {
+        let installCmd = "";
+        if (process.platform === 'win32') installCmd = req.install.win;
+        else if (process.platform === 'darwin') installCmd = req.install.mac;
+        else {
+          const isArch = fs.existsSync('/etc/arch-release');
+          installCmd = isArch ? req.install.arch : req.install.debian;
+        }
+        execSync(installCmd, { stdio: 'inherit' });
+        spinner.succeed(`${req.name} installed successfully.`);
+        return true;
+      } catch (err) {
+        spinner.fail(`Failed to auto-install ${req.name}. Please install it manually.`);
+        return false;
+      }
+    }
+    return false;
   }
 }
 
 export async function generateCommand() {
+  logger.info("What are you building today ?");
+
   const answers = await inquirer.prompt([
     {
       type: 'list',
-      name: 'type',
-      message: 'Choose your project template:',
-      choices: [
-        { name: 'React + Tailwind (Vite)', value: 'react-tailwind' },
-        { name: 'Vue + Tailwind (Vite)', value: 'vue-tailwind' },
-        { name: 'Django (Project + App + Venv)', value: 'django' },
-        { name: 'Angular (Workspace)', value: 'angular' },
-        { name: 'Express API (Minimal)', value: 'express' }
-      ]
+      name: 'domain',
+      message: 'Select Architecture:',
+      choices: ['Frontend', 'Backend', 'Monorepo']
+    },
+    {
+      type: 'list',
+      name: 'framework',
+      message: 'Select Stack:',
+      when: (a) => a.domain !== 'Monorepo',
+      choices: (a) => a.domain === 'Frontend' 
+        ? ['next', 'react-vite', 'vue-vite']
+        : ['go-micro', 'nestjs', 'express', 'fastapi', 'django']
+    },
+    {
+      type: 'list',
+      name: 'goFramework',
+      message: 'Go Framework:',
+      when: (a) => a.framework === 'go-micro',
+      choices: ['std', 'gin', 'fiber']
     },
     {
       type: 'input',
       name: 'projectName',
-      message: 'Project name:',
-      default: 'my_flow_app',
-      validate: (input, currentAnswers) => {
-        const name = input.trim();
-        if (!name) return 'A name is required.';
-        if (/^\d/.test(name)) return 'Name cannot start with a number.';
-        
-        if (currentAnswers.type === 'django') {
-          if (!PYTHON_REGEX.test(name)) return 'Use underscores (_) for Django projects.';
-        } else {
-          if (!GENERAL_REGEX.test(name)) return 'Invalid characters used (use alphanumeric, - or _).';
-        }
-        return true;
-      }
+      message: 'Project Name:',
+      validate: (i) => /^[a-z0-9-_]+$/i.test(i) || 'Use alphanumeric characters only.'
+    },
+    {
+      type: 'confirm',
+      name: 'enterprisePack',
+      message: 'Enable DevOps Pack?',
+      default: true
     }
   ]);
 
-  if (answers.type === 'django') {
-    const djangoSub = await inquirer.prompt([{
-      type: 'input',
-      name: 'appName',
-      message: 'Initial app name:',
-      default: 'core',
-      validate: (input) => {
-        if (!PYTHON_REGEX.test(input)) return 'Invalid Python App name.';
-        if (input === answers.projectName) return 'App name cannot be the same as project name.';
-        return true;
-      }
-    }]);
-    answers.appName = djangoSub.appName;
-  }
-
-  const projectDir = path.resolve(process.cwd(), answers.projectName);
-  
-  if (await fs.pathExists(projectDir)) {
-    logger.error(`Error: Directory "${answers.projectName}" already exists.`);
+  const ready = await ensurePrerequisites(answers.framework);
+  if (!ready) {
+    logger.error("Missing dependencies. Abortion.");
     return;
   }
 
-  const spinner = ora(chalk.magenta('Generating your project...')).start();
+  const projectDir = path.resolve(process.cwd(), answers.projectName);
+  if (await fs.pathExists(projectDir)) {
+    logger.error(`Folder ${answers.projectName} already exists.`);
+    return;
+  }
+
+  const tracker = new ProgressTracker(8);
+  const spinner = ora(chalk.magenta('Starting FlowDev Engine...')).start();
 
   try {
-    switch (answers.type) {
-      case 'react-tailwind': await setupVite(projectDir, answers.projectName, 'react', true, spinner); break;
-      case 'vue-tailwind': await setupVite(projectDir, answers.projectName, 'vue', true, spinner); break;
-      case 'django': await setupDjango(projectDir, answers, spinner); break;
-      case 'angular': await setupAngular(projectDir, answers.projectName, spinner); break;
-      case 'express': await setupExpress(projectDir, answers.projectName, spinner); break;
+    if (answers.domain === 'Monorepo') {
+
+      execute(`${npxCmd} --yes create-turbo@latest "${answers.projectName}" --package-manager=npm --example=basic`, spinner, tracker, 'Building Turborepo...', true);
+    } else if (answers.framework === 'next') {
+      execute(`${npxCmd} --yes create-next-app@latest "${answers.projectName}" --typescript --tailwind --eslint --app --src-dir --use-npm --no-git`, spinner, tracker, 'Scaffolding Next.js...', true);
+    } else if (answers.framework === 'go-micro') {
+      await setupGo(projectDir, answers, spinner, tracker);
+    } else if (['fastapi', 'django'].includes(answers.framework)) {
+      await setupPython(projectDir, answers, spinner, tracker);
+    } else if (answers.framework && answers.framework.includes('vite')) {
+      await setupVite(projectDir, answers, spinner, tracker);
     }
 
-    await initGit(projectDir, spinner);
-    spinner.succeed(chalk.green(`Project "${answers.projectName}" successfully generated.`));
-    showSuccessTips(answers);
+    if (process.cwd() !== projectDir && await fs.pathExists(projectDir)) process.chdir(projectDir);
+
+    if (answers.enterprisePack) {
+      spinner.text = `${tracker.getBar()} Generating Docker & CI/CD...`;
+      let dockerfileContent = '';
+      
+      if (answers.framework === 'go-micro') {
+        dockerfileContent = `FROM golang:1.21-alpine\nWORKDIR /app\nCOPY . .\nRUN go mod download\nRUN go build -o main ./cmd/api\nCMD ["./main"]`;
+      } else if (answers.framework === 'fastapi') {
+        dockerfileContent = `FROM python:3.11-slim\nWORKDIR /app\nCOPY . .\nRUN pip install -r requirements.txt\nCMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]`;
+      } else if (answers.framework === 'django') {
+        dockerfileContent = `FROM python:3.11-slim\nWORKDIR /app\nCOPY . .\nRUN pip install -r requirements.txt\nRUN python manage.py migrate\nCMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]`;
+      } else {
+        dockerfileContent = `FROM node:20-alpine\nWORKDIR /app\nCOPY . .\nRUN npm install\nCMD ["npm", "run", "dev"]`;
+      }
+      await fs.writeFile('Dockerfile', dockerfileContent);
+      tracker.next();
+    }
+
+    execute('git init', spinner, tracker, 'Initializing Git...');
+    await fs.writeFile('.gitignore', 'node_modules\n.env\ndist\nvenv\n*.log\n__pycache__\n*.sqlite3\n');
+
+   
+    let runCommand = 'npm run dev';
+    if (answers.domain === 'Monorepo') {
+       runCommand = 'npm run dev';
+    } else if (answers.framework === 'go-micro') {
+      runCommand = 'go run cmd/api/main.go';
+    } else if (answers.framework === 'fastapi') {
+      const activate = process.platform === 'win32' ? 'venv\\Scripts\\activate' : 'source venv/bin/activate';
+      runCommand = `${activate} && uvicorn main:app --reload`;
+    } else if (answers.framework === 'django') {
+      const activate = process.platform === 'win32' ? 'venv\\Scripts\\activate' : 'source venv/bin/activate';
+      runCommand = `${activate} && python manage.py runserver`;
+    }
+
+    spinner.succeed(chalk.green(`\nProject "${answers.projectName}" successfully created !`));
+    logger.success(`Stack: ${answers.framework || 'Monorepo'} | DevOps: ${answers.enterprisePack}`);
+    
+    console.log(chalk.cyan(`\n  Run: cd ${answers.projectName} && ${runCommand}\n`));
 
   } catch (error) {
-    spinner.fail(chalk.red('Installation encountered an error.'));
-    console.error(`\n${chalk.bgRed(' DEBUG ')} ${error.message}`);
+    if (spinner.isSpinning) spinner.fail(chalk.red('Process failed.'));
+    logger.error(error.message);
   }
 }
 
-
-
-async function setupVite(dir, name, framework, withTailwind, spinner) {
-  execute(`${npmCmd} create vite@latest "${name}" -- --template ${framework}`, spinner, `Scaffolding ${framework} with Vite...`);
-  
-  const originalDir = process.cwd();
-  process.chdir(dir);
-
-  execute(`${npmCmd} install`, spinner, 'Installing project dependencies...');
-
-  const folders = ['components', 'services', 'utils', 'hooks', 'assets'];
-  for (const f of folders) await fs.ensureDir(path.join(dir, 'src', f));
-
-  if (withTailwind) {
-    execute(`${npmCmd} install -D tailwindcss@3 postcss@8 autoprefixer@10`, spinner, 'Installing Tailwind CSS...');
-
-    const tailwindConfig = `export default {
-  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx,vue}"],
-  theme: { extend: {} },
-  plugins: [],
-}`;
-    await fs.writeFile(path.join(dir, 'tailwind.config.js'), tailwindConfig);
-    await fs.writeFile(path.join(dir, 'postcss.config.js'), `export default { plugins: { tailwindcss: {}, autoprefixer: {} } }`);
-
-    const cssPath = path.join(dir, 'src', 'index.css');
-    const tailwindDirectives = `@tailwind base;\n@tailwind components;\n@tailwind utilities;\n\n`;
-    const currentCss = (await fs.pathExists(cssPath)) ? await fs.readFile(cssPath, 'utf-8') : "";
-    await fs.writeFile(cssPath, tailwindDirectives + currentCss);
-  }
-  process.chdir(originalDir);
-}
-
-async function setupDjango(dir, data, spinner) {
-  const { projectName, appName } = data;
-  const isWin = process.platform === 'win32';
-  
+async function setupGo(dir, answers, spinner, tracker) {
   await fs.ensureDir(dir);
-  const originalDir = process.cwd();
   process.chdir(dir);
+  execute(`${goCmd} mod init ${answers.projectName}`, spinner, tracker, 'Initializing Go Mod...');
+  if (answers.goFramework !== 'std') {
+    const pkg = answers.goFramework === 'gin' ? 'github.com/gin-gonic/gin' : 'github.com/gofiber/fiber/v2';
+    execute(`${goCmd} get ${pkg}`, spinner, tracker, `Fetching ${answers.goFramework}...`);
+  }
+  await fs.ensureDir('cmd/api');
+  await fs.writeFile('cmd/api/main.go', 'package main\nimport "fmt"\nfunc main() { fmt.Println("FlowDev Go Live") }');
+}
 
-  try {
-    execute(`${pythonCmd} -m venv venv`, spinner, 'Creating Virtual Environment...');
+async function setupPython(dir, answers, spinner, tracker) {
+  await fs.ensureDir(dir);
+  process.chdir(dir);
+  execute(`${pythonCmd} -m venv venv`, spinner, tracker, 'Creating Virtual Env...');
+  const pip = process.platform === 'win32' ? 'venv\\Scripts\\pip' : './venv/bin/pip';
+  const pythonVenv = process.platform === 'win32' ? 'venv\\Scripts\\python' : './venv/bin/python';
+
+  if (answers.framework === 'fastapi') {
+    execute(`${pip} install fastapi uvicorn`, spinner, tracker, 'Installing FastAPI...');
+    const fastApiBoilerplate = `from fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get("/")\ndef read_root():\n    return {"message": "FlowDev FastAPI is live!"}\n`;
+    await fs.writeFile('main.py', fastApiBoilerplate);
+    await fs.writeFile('requirements.txt', 'fastapi\nuvicorn');
+  } else if (answers.framework === 'django') {
+    execute(`${pip} install django`, spinner, tracker, 'Installing Django...');
+    execute(`${pythonVenv} -m django startproject config .`, spinner, tracker, 'Scaffolding Django...');
+    execute(`${pythonVenv} manage.py startapp core`, spinner, tracker, 'Creating core app...');
     
-    const venvPython = isWin ? path.join(dir, 'venv', 'Scripts', 'python.exe') : path.join(dir, 'venv', 'bin', 'python');
-    
-    execute(`"${venvPython}" -m pip install django`, spinner, 'Installing Django via pip...');
-    execute(`"${venvPython}" -m django startproject config .`, spinner, 'Initializing Django core...');
-    execute(`"${venvPython}" manage.py startapp ${appName}`, spinner, `Creating app: ${appName}...`);
-
-
     const settingsPath = path.join(dir, 'config', 'settings.py');
     let settings = await fs.readFile(settingsPath, 'utf-8');
-    settings = settings.replace("INSTALLED_APPS = [", `INSTALLED_APPS = [\n    '${appName}',`);
+    settings = settings.replace("INSTALLED_APPS = [", "INSTALLED_APPS = [\n    'core',");
     await fs.writeFile(settingsPath, settings);
 
-    // Basic app configuration
-    await fs.writeFile(path.join(dir, appName, 'urls.py'), `from django.urls import path\nfrom . import views\n\nurlpatterns = [ path('', views.index, name='index'), ]`);
-    await fs.writeFile(path.join(dir, appName, 'views.py'), `from django.http import HttpResponse\n\ndef index(request):\n    return HttpResponse("<h1>${projectName} is live!</h1>")`);
-    
-    // Global URL routing
-    const projectUrlsPath = path.join(dir, 'config', 'urls.py');
-    const projectUrls = `from django.contrib import admin\nfrom django.urls import path, include\n\nurlpatterns = [\n    path('admin/', admin.site.urls),\n    path('', include('${appName}.urls')),\n]`;
-    await fs.writeFile(projectUrlsPath, projectUrls);
+    const viewPath = path.join(dir, 'core', 'views.py');
+    await fs.writeFile(viewPath, `from django.http import JsonResponse\ndef home(request):\n    return JsonResponse({"message": "FlowDev Django is live!"})`);
 
-  } finally {
-    process.chdir(originalDir);
+    const urlsPath = path.join(dir, 'config', 'urls.py');
+    await fs.writeFile(urlsPath, `from django.contrib import admin\nfrom django.urls import path\nfrom core.views import home\n\nurlpatterns = [\n    path('admin/', admin.site.urls),\n    path('', home, name='home'),\n]`);
+
+    execute(`${pythonVenv} manage.py migrate`, spinner, tracker, 'Running migrations...');
+    execute(`${pip} freeze > requirements.txt`, spinner, tracker, 'Generating requirements.txt...');
   }
 }
 
-async function initGit(dir, spinner) {
-  try {
-    spinner.text = 'Initializing Git repository...';
-    const ignorePath = path.join(dir, '.gitignore');
-    if (!(await fs.pathExists(ignorePath))) {
-      await fs.writeFile(ignorePath, 'node_modules\n.env\ndist\nbuild\n__pycache__\n*.log\nvenv\n*.pyc\n');
-    }
-    const originalDir = process.cwd();
-    process.chdir(dir);
-    execute('git init', spinner);
-    execute('git add .', spinner);
-    execute('git commit -m "Initial commit by FlowDev"', spinner);
-    process.chdir(originalDir);
-  } catch (err) {
-    spinner.warn(chalk.yellow('Git initialization skipped. Please ensure Git is installed.'));
-  }
-}
-
-async function setupAngular(dir, name, spinner) {
-  execute(`${npxCmd} --yes -p @angular/cli ng new "${name}" --defaults --skip-git`, spinner, 'Generating Angular Workspace...');
-}
-
-async function setupExpress(dir, name, spinner) {
+async function setupVite(dir, answers, spinner, tracker) {
   await fs.ensureDir(dir);
-  const pkg = { 
-    name, 
-    version: '1.0.0', 
-    type: 'module', 
-    scripts: { start: 'node src/index.js' }, 
-    dependencies: { express: '^4.18.2', cors: '^2.8.5' }
-  };
-  await fs.writeJson(path.join(dir, 'package.json'), pkg, { spaces: 2 });
-  await fs.ensureDir(path.join(dir, 'src'));
-  await fs.writeFile(path.join(dir, 'src', 'index.js'), `import express from 'express';\nconst app = express();\napp.get('/', (req, res) => res.send('API OK'));\napp.listen(3000, () => console.log('Server running on http://localhost:3000'));`);
-  
-  const originalDir = process.cwd();
   process.chdir(dir);
-  execute(`${npmCmd} install`, spinner, 'Installing Express dependencies...');
-  process.chdir(originalDir);
-}
-
-function showSuccessTips(data) {
-  console.log(chalk.blue('\n  Next Steps :'));
-  console.log(`${chalk.white('1.')} cd ${chalk.bold(data.projectName)}`);
-  if (data.type === 'django') {
-    console.log(`${chalk.white('2.')} ${process.platform === 'win32' ? 'venv\\Scripts\\activate' : 'source venv/bin/activate'}`);
-    console.log(`${chalk.white('3.')} python manage.py runserver`);
-  } else if (data.type === 'angular') {
-    console.log(`${chalk.white('2.')} ng serve`);
-  } else {
-    console.log(`${chalk.white('2.')} npm ${data.type.includes('tailwind') ? 'run dev' : 'start'}`);
-  }
+  const tpl = answers.framework === 'react-vite' ? 'react-ts' : 'vue-ts';
+  execute(`${npmCmd} create vite@latest . -- --template ${tpl}`, spinner, tracker, 'Vite Scaffolding...', true);
+  execute(`${npmCmd} install`, spinner, tracker, 'Installing NPM packages...', true);
 }

@@ -1,7 +1,8 @@
+
 /**
  * @fileoverview FlowDev  -  Intelligent CLI tool
  * @module flowdev
- * @version 1.0.5
+ * @version 1.2.0
  * * @license MIT
  * Copyright (c) 2026 FlowDev Technologies.
  * * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -21,66 +22,64 @@ import chalk from 'chalk';
 import ora from 'ora';
 import fs from 'fs-extra';
 import path from 'path';
-import { getAIResponse } from '../../utils/engine-check.js'; 
+import { getAIResponse } from '../../utils/engine-check.js';
 import { logger } from '../../utils/logger.js';
 
 const AUDIT_EXTENSIONS = ['.js', '.ts', '.py', '.php', '.go', '.jsx', '.tsx', '.vue'];
-const IGNORE_DIRS = ['node_modules', '.git', 'dist', 'build', 'venv'];
+const IGNORE_DIRS = ['node_modules', '.git', 'dist', 'build', 'venv', '.next'];
+const MAX_FILES = 10;
+const MAX_CHARS = 20_000;
 
 async function getFiles(dir) {
-  const subdirs = await fs.readdir(dir);
-  const files = await Promise.all(subdirs.map(async (subdir) => {
-    const res = path.resolve(dir, subdir);
-    if (IGNORE_DIRS.includes(subdir)) return [];
-    return (await fs.stat(res)).isDirectory() ? getFiles(res) : res;
-  }));
-  return files.flat().filter(f => AUDIT_EXTENSIONS.includes(path.extname(f)));
+  const entries = await fs.readdir(dir);
+  const files = await Promise.all(
+    entries.map(async (entry) => {
+      if (IGNORE_DIRS.includes(entry)) return [];
+      const res = path.resolve(dir, entry);            
+      return (await fs.stat(res)).isDirectory() ? getFiles(res) : res;
+    })
+  );
+  return files.flat().filter(f => AUDIT_EXTENSIONS.includes(path.extname(f))); 
 }
 
 export async function auditCommand() {
-  const spinner = ora(chalk.cyan('Scanning project for audit...')).start();
+  const spinner = ora(chalk.cyan('Scanning files for audit...')).start();
 
   try {
     const rootDir = process.cwd();
     const files = await getFiles(rootDir);
 
     if (files.length === 0) {
-      spinner.fail(chalk.red('No source files found to audit.'));
+      spinner.fail(chalk.red('No source files found.'));
       return;
     }
 
-    spinner.text = chalk.magenta(`Preparing audit for ${files.length} files...`);
-
-    let codeContext = "";
-    for (const file of files.slice(0, 15)) { 
-        const content = await fs.readFile(file, 'utf-8');
-        codeContext += `\n--- File: ${path.basename(file)} ---\n${content}\n`;
+    let codeContext = '';
+    for (const file of files.slice(0, MAX_FILES)) {
+      const content = await fs.readFile(file, 'utf-8');
+      codeContext += `\n--- File: ${path.basename(file)} ---\n${content}\n`; 
     }
 
     const prompt = `
-      Analyze the following code for:
-      1. Potential Bugs or logic errors.
-      2. Security vulnerabilities (exposed keys, unsafe inputs).
-      3. Performance bottlenecks.
-      4. Code quality and Best Practices.
+Analyze this code for bugs, security flaws, and performance issues.
+Provide a concise report with bullet points.
+Code context:
+${codeContext.substring(0, MAX_CHARS)}
+    `.trim();
 
-      Provide a concise report with clear headings and bullet points.
-      
-      Code to analyze:
-      ${codeContext.substring(0, 30000)} 
-    `;
     const responseStream = await getAIResponse(
-        [{ role: 'user', content: prompt }], 
-        spinner
+      [{ role: 'user', content: prompt }],
+      spinner
     );
 
     spinner.stop();
+    console.log(chalk.bold.magenta('\nAudit Report:\n'));
+
     for await (const part of responseStream) {
-      process.stdout.write(chalk.white(part.message.content));
+      const text = part?.message?.content;
+      if (text) process.stdout.write(chalk.white(text));
     }
-
-    console.log(chalk.cyan('\n\nAudit complete. Always verify AI suggestions.'));
-
+    console.log(chalk.cyan('\n\nAudit complete.'));
   } catch (error) {
     spinner.stop();
     logger.error(`Audit failed: ${error.message}`);

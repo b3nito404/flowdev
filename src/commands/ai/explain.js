@@ -1,7 +1,8 @@
+
 /**
  * @fileoverview FlowDev  -  Intelligent CLI tool
  * @module flowdev
- * @version 1.0.5
+ * @version 1.2.0
  * * @license MIT
  * Copyright (c) 2026 FlowDev Technologies.
  * * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -16,24 +17,25 @@
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
  */
-
 import chalk from 'chalk';
 import ora from 'ora';
 import fs from 'fs-extra';
 import path from 'path';
 import isBinaryPath from 'is-binary-path';
 import { createRequire } from 'module';
-import { getAIResponse } from '../../utils/engine-check.js'; 
+import { getAIResponse } from '../../utils/engine-check.js';
 import { logger } from '../../utils/logger.js';
 
 const require = createRequire(import.meta.url);
 const pdf = require('pdf-parse');
 const mammoth = require('mammoth');
-                                                    
-async function extractText(filePath) { 
-  const ext = path.extname(filePath).toLowerCase();     
+
+const MAX_CHARS = 10_000;
+
+async function extractText(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
   if (ext === '.docx') {
-    const buffer = await fs.readFile(filePath); 
+    const buffer = await fs.readFile(filePath);
     const result = await mammoth.extractRawText({ buffer });
     return result.value;
   }
@@ -43,39 +45,34 @@ async function extractText(filePath) {
     return data.text;
   }
   if (isBinaryPath(filePath)) throw new Error('Binary files are not supported.');
-  
   return await fs.readFile(filePath, 'utf-8');
 }
 
 export async function explainCommand(filePath) {
-  if (!filePath) {
-    logger.error('Please specify a file path.'); 
-    return;   
-  }
+  if (!filePath) return logger.error('Please specify a file path.');
 
-  const spinner = ora(chalk.cyan('Initializing...')).start();
+  const spinner = ora(chalk.cyan('Reading file...')).start();
 
   try {
-    spinner.text = chalk.cyan(`Reading ${path.basename(filePath)}...`); 
+    const baseName = path.basename(filePath);
     const content = await extractText(filePath);
 
-    
     const responseStream = await getAIResponse(
-        [{ 
-            role: 'user', 
-            content: `Explain the following content clearly and concisely:\n\n${content.substring(0, 15000)}` 
-        }],
-        spinner
+      [{
+        role: 'user',
+        content: `Explain this content clearly and concisely:\n\n${content.substring(0, MAX_CHARS)}`
+      }],
+      spinner
     );
 
-    spinner.stop(); 
-    console.log(chalk.red.bold(`ANALYSIS: ${path.basename(filePath).toUpperCase()} `));
-    
+    spinner.stop();
+    console.log(chalk.red.bold(`\nANALYSIS: ${baseName.toUpperCase()}\n`)); 
+
     for await (const part of responseStream) {
-      process.stdout.write(chalk.white(part.message.content));
+      const text = part?.message?.content;
+      if (text) process.stdout.write(chalk.white(text));
     }
     process.stdout.write('\n');
-    
   } catch (error) {
     spinner.stop();
     logger.error(`Explain error: ${error.message}`);

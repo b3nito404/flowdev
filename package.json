@@ -22,11 +22,14 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
+    "@octokit/rest": "^22.0.1",
     "axios": "^1.6.0",
     "boxen": "^7.1.1",
     "chalk": "^5.3.0",
     "commander": "^11.1.0",
     "conf": "^15.1.0",
+    "dockerode": "^4.0.9",
     "dotenv": "^16.3.1",
     "execa": "^8.0.1",
     "figlet": "^1.7.0",
@@ -35,7 +38,6 @@
     "inquirer": "^9.3.8",
     "is-binary-path": "^3.0.0",
     "mammoth": "^1.11.0",
-    "ollama": "^0.6.3",
     "ora": "^7.0.1",
     "pdf-parse": "^2.4.5",
     "tabtab": "^3.0.2"
@@ -46,5 +48,11 @@
   },
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "files": [
+  "bin",
+  "src",
+  "README.md",
+  "LICENSE"
+]
 }

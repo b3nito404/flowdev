@@ -1,7 +1,8 @@
+
 /**
  * @fileoverview FlowDev  -  Intelligent CLI tool
  * @module flowdev
- * @version 1.0.5
+ * @version 1.2.0
  * * @license MIT
  * Copyright (c) 2026 FlowDev Technologies.
  * * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -16,79 +17,31 @@
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
  */
-
 import chalk from 'chalk';
 import ora from 'ora';
 import fs from 'fs-extra';
 import path from 'path';
 import { logger } from '../../utils/logger.js';
-import { getAIResponse } from '../../utils/engine-check.js'; 
+import { getAIResponse } from '../../utils/engine-check.js';
+
 
 export async function testCommand(fileRelativePath) {
-  const spinner = ora(chalk.cyan(`Preparing test generation...`)).start();
 
+  const spinner = ora(chalk.cyan('Generating tests...')).start();
   try {
-    const filePath = path.resolve(process.cwd(), fileRelativePath);
+    const prompt = `Generate a ${framework} test file for this code. Return ONLY code.\n\n${content}`;
+    const responseStream = await getAIResponse([{ role: 'user', content: prompt }], spinner);
     
-    if (!(await fs.pathExists(filePath))) {
-      spinner.fail(chalk.red(`File not found: ${fileRelativePath}`));
-      return;
-    }
-
-    const content = await fs.readFile(filePath, 'utf-8');
-    const ext = path.extname(filePath);
-    const fileName = path.basename(filePath, ext);
-    const dir = path.dirname(filePath);
-    
-    let framework = "Vitest";
-    let testFileName = `${fileName}.test${ext}`;
-    
-    if (ext === '.py') {
-      framework = "Pytest";
-      testFileName = `test_${fileName}${ext}`;
-    }
-
-    const prompt = `
-      Analyze the following code and generate a complete test file using ${framework}.
-      Requirements:
-      - Include all necessary imports.
-      - Cover main functions with happy paths and edge cases.
-      - Return ONLY the code block starting with \`\`\` and ending with \`\`\`.
-      
-      Code to test:
-      ${content}
-    `;
-
-   
-    const responseStream = await getAIResponse(
-        [{ role: 'user', content: prompt }],
-        spinner
-    );
-
-    let fullResponse = "";
-    spinner.text = chalk.yellow("Writing tests (Streaming)...");
-    
+    spinner.stop();
+    let fullResponse = '';
     for await (const part of responseStream) {
-        fullResponse += part.message.content;
-    
-        spinner.text = chalk.yellow(`Generating tests... (${fullResponse.length} chars)`);
+        const txt = part?.message?.content;
+        if (txt) fullResponse += txt;
     }
 
-    spinner.stop();
-
-    const codeBlockRegex = /```[\w]*\n([\s\S]*?)```/;
-    const match = fullResponse.match(codeBlockRegex);
-    const testCode = match ? match[1] : fullResponse;
-
-    const outputPath = path.join(dir, testFileName);
-    await fs.writeFile(outputPath, testCode);
-
-    console.log(chalk.green(`\nTests generated successfully!`));
-    console.log(chalk.gray(` Location: `) + chalk.white(outputPath));
-    console.log(chalk.yellow(` Tip: Run your tests with '${ext === '.py' ? 'pytest' : 'npm test'}'`));
-
-  } catch (error) {
-    spinner.stop();
-    logger.error('Test generation failed: ' + error.message);
-  }
+    const cleanCode = fullResponse.replace(/```[\w]*\n/g, '').replace(/```/g, '').trim();
+    
+    await fs.writeFile(outputPath, cleanCode);
+    console.log(chalk.green(`\nTests saved at: ${outputPath}`));
+  } catch (e) { spinner.stop(); logger.error(e.message); }
 }

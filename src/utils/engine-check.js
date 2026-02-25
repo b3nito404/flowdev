@@ -1,217 +1,145 @@
-import ollama from 'ollama';
+
+/**
+ * @fileoverview FlowDev  -  Intelligent CLI tool
+ * @module flowdev
+ * @version 1.2.0
+ * * @license MIT
+ * Copyright (c) 2026 FlowDev Technologies.
+ * * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ * * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ */
+import os from 'os';
+import path from 'path';
+import fs from 'fs-extra';
 import chalk from 'chalk';
-import inquirer from 'inquirer';
-import { exec, spawn } from 'node:child_process';
-import { promisify } from 'util';
-import { logger } from '../utils/logger.js'; 
-import { getDeepSeekKey } from '../utils/config-manager.js';
 
-const execAsync = promisify(exec);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const LOCAL_MODEL = 'onnx-community/Qwen2.5-1.5B-Instruct';
+const MAX_NEW_TOKENS = 2048;
+const BAR_WIDTH = 30;
 
+const HF_CACHE_DIR = path.join(os.homedir(), '.cache', 'huggingface', 'hub');
+const MODEL_CACHE = path.join(HF_CACHE_DIR, 'models--onnx-community--Qwen2.5-1.5B-Instruct');
 
-async function waitForOllamaServer({ retries = 15, delayMs = 1000 } = {}) {
-  for (let i = 0; i < retries; i++) {
-    try {
-      await ollama.list();
-      return true;
-    } catch (e) {
-      await sleep(delayMs);
-    }
-  }
-  return false;
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return '?';
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+  return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
 }
 
-async function installOllamaEngine(spinner) {
-  const isWindows = process.platform === 'win32';
-
-  if (spinner) spinner.stop();
-  
-  console.log(chalk.yellow('\n  Ollama engine is missing.'));
-  console.log(chalk.dim('FlowDev requires Ollama to run local models without API keys.'));
-  
-
-  const { confirm } = await inquirer.prompt([{
-      type: 'confirm',
-      name: 'confirm',
-      message: 'Do you want to install Ollama automatically now?',
-      default: true
-  }]);
-  if (!confirm) throw new Error("Ollama installation aborted by user.");
-
-
-  if (spinner) spinner.start(chalk.yellow("Installing local neural components... (Please wait)"));
-
-  const installCmd = isWindows
-    ? 'winget install Ollama.Ollama --silent --accept-source-agreements'
-    : 'curl -fsSL https://ollama.com/install.sh | sh';
-
-  try {
-    await execAsync(installCmd, { maxBuffer: 10 * 1024 * 1024 });
-    if (spinner) spinner.succeed(chalk.green('Local engine installed.'));
-    await sleep(1500);
-  } catch (error) {
-    if (spinner) spinner.fail(chalk.red("Automatic installation failed."));
-    logger.error(`Please install Ollama manually from https://ollama.com`);
-    throw error;
-  }
+function renderBar(label, pct, loaded, total) {
+  const filled = Math.round((pct / 100) * BAR_WIDTH);
+  const empty = BAR_WIDTH - filled;
+  const bar = chalk.green('#'.repeat(filled)) + chalk.dim('-'.repeat(empty));
+  const pctStr = chalk.bold.white(`${String(Math.round(pct)).padStart(3)}%`);
+  const sizeStr = chalk.dim(`${formatBytes(loaded)} / ${formatBytes(total)}`);
+  const name = chalk.cyan(label.padEnd(20).slice(0, 20));
+  process.stdout.write(`\r  ${name}  [${bar}]  ${pctStr}  ${sizeStr}   `);
 }
 
-export async function ensureOllamaReady(spinner, modelName) {
-  try {
-    await execAsync('ollama --version');
-  } catch (e) {
-    await installOllamaEngine(spinner);
-  }
+function clearBar(label) {
+  process.stdout.write('\r' + ' '.repeat(process.stdout.columns ?? 80) + '\r');
+  console.log(`  ${chalk.green('[OK]')} ${chalk.cyan(label)}`);
+}
 
-  if (!(await waitForOllamaServer({ retries: 3, delayMs: 1000 }))) {
-    if (spinner) spinner.text = chalk.blue('Starting local inference service...');
-    const child = spawn('ollama', ['serve'], { detached: true, stdio: 'ignore' });
-    child.unref();
+async function isModelCached() {
+  const snapshotsDir = path.join(MODEL_CACHE, 'snapshots');
+  if (!(await fs.pathExists(snapshotsDir))) return false;
+  const entries = await fs.readdir(snapshotsDir);
+  return entries.length > 0;
+}
 
-    const ready = await waitForOllamaServer({ retries: 30, delayMs: 1000 });
-    if (!ready) throw new Error("The local server is not responding.");
-  }
+let _pipeline = null;
 
-  let hasModel = false;
-  try {
-    const models = await ollama.list();
-    hasModel = Array.isArray(models?.models) && models.models.some((m) => m.name?.startsWith(modelName));
-  } catch (err) {}
+async function getLocalPipeline(spinner) {
+  if (_pipeline) return _pipeline;
 
-  if (!hasModel) {
-    if (spinner) spinner.text = chalk.magenta(`Acquiring the model ${modelName} (size: ~4GB)... This happens only once.`);
-    await ollama.pull({ model: modelName });
-    if (spinner) spinner.succeed(chalk.green('Local engine ready.'));
+  const { pipeline, env } = await import('@huggingface/transformers');
+  
+  
+  env.logLevel = 'error'; 
+  env.backends.onnx.wasm.numThreads = 4;
+
+  const cached = await isModelCached();
+
+  if (!cached) {
+    if (spinner) spinner.stop();
+    console.log(chalk.bold.magenta(`\n  First launch: Downloading Qwen2.5 (1.5B)...\n`));
+    const seen = new Set();
+    const onProgress = (ev) => {
+      if (ev.status !== 'progress' && ev.status !== 'downloading') return;
+      const label = ev.file ?? ev.name ?? 'chunk';
+      if (!seen.has(label)) { seen.add(label); process.stdout.write('\n'); }
+      renderBar(label, ev.progress ?? 0, ev.loaded ?? 0, ev.total ?? 0);
+      if ((ev.progress ?? 0) >= 100) clearBar(label);
+    };
+
+    _pipeline = await pipeline('text-generation', LOCAL_MODEL, {
+      dtype: 'q4',
+      device: 'cpu',
+      progress_callback: onProgress,
+    });
+    console.log(chalk.bold.green('\n  Model installed successfully!\n'));
     if (spinner) spinner.start();
+  } else {
+    _pipeline = await pipeline('text-generation', LOCAL_MODEL, {
+      dtype: 'q4',
+      device: 'cpu',
+      local_files_only: true,
+    });
   }
+  return _pipeline;
 }
 
+export async function getAIResponse(messages, spinner) {
+  const { TextStreamer } = await import('@huggingface/transformers');
+  const generator = await getLocalPipeline(spinner);
 
+  const queue = [];
+  let resolver = null;
+  let finished = false;
 
-async function* streamDeepSeek(messages) {
-  const apiKey = getDeepSeekKey();
-  
-  if (!apiKey) {
-      throw new Error("API Key missing. Please run 'flowdev config' to set it up.");
-  }
-  
-  const response = await fetch('https://api.deepseek.com/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: messages,
-      stream: true
-    })
+  const push = (token) => {
+    if (resolver) { resolver({ value: token, done: false }); resolver = null; }
+    else queue.push(token);
+  };
+
+  const streamer = new TextStreamer(generator.tokenizer, {
+    skip_prompt: true,
+    skip_special_tokens: true,
+    callback_function: (text) => push(text),
   });
 
-  if (!response.ok) {
-    const errText = await response.text();
-    if (response.status === 401) {
-        throw new Error(`Invalid API Key. Please run 'flowdev config' to update it.`);
-    } else if (response.status === 402) {
-        throw new Error(`Insufficient Balance on DeepSeek account.`);
-    }
-    throw new Error(`DeepSeek API Error: ${response.status} - ${errText}`);
-  }
+  generator(messages, {
+    max_new_tokens: MAX_NEW_TOKENS,
+    streamer,
+    do_sample: true,
+    temperature: 0.4, 
+  }).then(() => {
+    finished = true;
+    if (resolver) resolver({ value: '', done: true });
+  });
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder("utf-8");
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    
-    buffer += decoder.decode(value, { stream: true });
-    
-    let boundary = buffer.indexOf('\n');
-    while (boundary !== -1) {
-        const line = buffer.slice(0, boundary).trim();
-        buffer = buffer.slice(boundary + 1);
-        
-        if (line.startsWith("data: ")) {
-            const jsonStr = line.slice(6);
-            if (jsonStr === "[DONE]") continue;
-            
-            try {
-                const json = JSON.parse(jsonStr);
-                const content = json.choices[0]?.delta?.content;
-                if (content) yield { message: { content: content } };
-            } catch (e) {
-                
-            }
-        }
-        boundary = buffer.indexOf('\n');
-    }
-  }
-}
-
-
-
-export async function getAIResponse(messages, spinner, forceModel = null) {
-  if (spinner) spinner.stop();
-
-  let provider = forceModel;
-
- 
-  if (!provider) {
-    const hasKey = !!getDeepSeekKey();
-    
-    const answer = await inquirer.prompt([
-      {
-        type: 'list',
-        name: 'provider',
-        message: 'Select AI Model:',
-        choices: [
-          {
-            name: 'Llama 3 (Local - Private, Free, requires RAM)',
-            value: 'llama3',
-            short: 'Llama 3 (Local)'
-          },
-          {
-            name: ` DeepSeek V3 (Cloud - Fast, requires Key)`,
-            value: 'deepseek',
-            disabled: !hasKey ? 'run "flowdev config" first' : false,
-            short: 'DeepSeek (Cloud)'
-          }
-        ]
+  return (async function* () {
+    while (true) {
+      if (queue.length > 0) {
+        yield { message: { content: queue.shift() } };
+      } else if (finished) {
+        break;
+      } else {
+        const token = await new Promise((res) => { resolver = res; });
+        if (token.done) break;
+        yield { message: { content: token.value } };
       }
-    ]);
-    provider = answer.provider;
-  }
-
-  if (spinner) spinner.start();
-
-  if (provider === 'llama3') {
-    if (spinner) spinner.text = chalk.cyan('Checking local neural engine...');
-    await ensureOllamaReady(spinner, 'llama3');
-    
-    if (spinner) spinner.text = chalk.magenta('Thinking (Local)...');
-    return await ollama.chat({
-      model: 'llama3',
-      messages: messages,
-      stream: true,
-    });
-  } 
-  else if (provider === 'deepseek') {
-    if (spinner) spinner.text = chalk.cyan('Handshaking with DeepSeek server...');
-    
- 
-    try {
-        await fetch('https://www.google.com', { method: 'HEAD', signal: AbortSignal.timeout(3000) });
-    } catch (e) {
-        throw new Error("No internet connection detected for Cloud AI.");
     }
-    
-    if (spinner) spinner.text = chalk.magenta('Thinking (Cloud)...');
-    return streamDeepSeek(messages);
-  }
+  })();
 }
-
-
-export { ensureOllamaReady as ensureEngineReady };

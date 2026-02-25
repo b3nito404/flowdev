@@ -3,7 +3,7 @@
 /**
  * @fileoverview FlowDev  -  Intelligent CLI tool
  * @module flowdev
- * @version 1.0.5
+ * @version 1.2.0
  * * @license MIT
  * Copyright (c) 2026 FlowDev Technologies.
  * * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -36,7 +36,7 @@ import { testCommand } from '../commands/ai/test.js';
 import { updateCommand } from '../commands/system/update.js';
 import { readmeCommand } from '../commands/ai/readme.js';
 import { configCommand } from '../commands/config.js'
-import { commitCommand } from '../commands/git/commit.js';
+import { insightCommand} from '../commands/system/insight.js';
 
 
 const require = createRequire(import.meta.url);
@@ -140,14 +140,19 @@ export function setupCLI() {
   .action(readmeCommand);
 
   program
-  .command('commit')
-  .description('Generate an AI-powered commit message based on staged changes')
-  .action(commitCommand);
+  .command('insight')
+  .description('Live project dashboard (Git, PRs, Docker)')
+  .action(async () => {
+    await insightCommand();
+  });
 
  program
   .command('config')
-  .description('Configure AI models (API keys, settings)')
-  .action(configCommand);
+  .description('Manage FlowDev configuration (set/get/list)')
+  .argument('[args...]', 'Action (set/get), Key, and Value')
+  .action((args) => {
+    configCommand(args);
+  });
 
   program
   .command('update')
