@@ -1,6 +1,6 @@
 {
   "name": "@flowdevcli/flowdev",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "AI-powered CLI tool",
   "type": "module",
   "bin": {
@@ -50,9 +50,9 @@
     "access": "public"
   },
   "files": [
-  "bin",
-  "src",
-  "README.md",
-  "LICENSE"
-]
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ]
 }
